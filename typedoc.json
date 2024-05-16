@@ -15,6 +15,7 @@
     "Home": "https://kjur.github.io/typepki-jwt/",
     "Issue": "https://github.com/kjur/typepki-jwt/issues",
     "GitHub": "https://github.com/kjur/typepki-jwt",
+    "NPM": "https://www.npmjs.com/package/typepki-jwt",
     "TypePKI": "https://kjur.github.io/typepki",
     "jsrsasign": "https://kjur.github.io/jsrsasign"
   }
