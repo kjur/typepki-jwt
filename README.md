@@ -8,7 +8,7 @@ The 'TypePKI' library is an opensource free TypeScript PKI library which is the 
 The 'typepki-jwt' is a JWT(JSON Web Token) and JWS(JSON Web Signatures) sub module for TypePKI library.
 
 ## FEATURE
-- ASN.1 DER parser for ASN.1 hexadecimal string (BER will also be in the future.)
+- signing and verifying JWS(JSON Web Signatures)
 - Dual CommonJS/ES module package supporting CommonJS(CJS) and ES modules
 
 ## Uasge
