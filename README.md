@@ -15,7 +15,7 @@ The 'typepki-jwt' is a JWT(JSON Web Token) and JWS(JSON Web Signatures) sub modu
 
 ### signing JWS with private key
 This supports asymmetric private key or shared key of CrytoKey object of W3C Crypto API for signing.
-It may be useful to a generate key or importing key by using [typepki-webcrypto](https://kjur.github.io/typepki-webcrypto/) module.
+It may be useful to generate a key or import a key by using [typepki-webcrypto](https://kjur.github.io/typepki-webcrypto/) module.
 
 ```JavaScript
 import { importPEM } from "typepki-webcrypto";
@@ -25,7 +25,7 @@ const prvkey = await importPEM("-----BEGIN PRIVATE...", "SHA256withRSA");
 Now you can generate JWS signature.
 ```JavaScript
 import { signJWS } from "typepki-jwt";
-const sJWS = signJWS("RS256", prvkey, "eyJOe...", "eyJpc...");
+const sJWS = await signJWS("RS256", prvkey, "eyJOe...", "eyJpc...");
 ```
 "sJWS" will be a string such like "eyJOe...".
 
@@ -39,6 +39,11 @@ const pubkey = await importPEM("-----BEGIN PUBLIC...", "SHA256withRSA");
 Verifying JWS signature will be:
 ```JavaScript
 import { verifyJWS } from "typepki-jwt";
-const isValid = await verifyJWS(sJWS, pubkey);
+const isValid = await verifyJWS(sJWS, pubkey, ["RS256", "RS384", "RS512"]);
 ```
+
+NOTE: It is strongly recommended to specify the "acceptAlgs" optional argument such like "['RS256', 'RS384']" to prevent algorithm down grade attacks.
+
+
+
 
