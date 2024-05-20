@@ -9,6 +9,7 @@ The 'typepki-jwt' is a JWT(JSON Web Token) and JWS(JSON Web Signatures) sub modu
 
 ## FEATURE
 - signing and verifying JWS(JSON Web Signatures)
+- verifying JWT(JSON Web Token)
 - Dual CommonJS/ES module package supporting CommonJS(CJS) and ES modules
 
 ## Uasge
@@ -44,6 +45,23 @@ const isValid = await verifyJWS(sJWS, pubkey, ["RS256", "RS384", "RS512"]);
 
 NOTE: It is strongly recommended to specify the "acceptAlgs" optional argument such like "['RS256', 'RS384']" to prevent algorithm down grade attacks.
 
+### verifying JWT
+Verifying JWT will be similar to JWS by {@link verifyJWS}. To verify JWT you need to specify JWT acceptable parameters by {@link JWTVerifyOption}.
+Whey you want to accept JWT tokens with:
 
+- with HS256 and HS384 signature algorithms
+- "http://issuer1.example.com/" or "http://issuer2.example.com/" as issuers
+- verify at current time (by without verifyAt member)
 
+JWTVerifyOption will be following
+```ts
+const opt: JWTVerifyOption = {
+  alg: ["HS256", "HS384"],
+  iss: ["http://issuer1.example.com/", "http://issuer2.example.com/"],
+};
+```
 
+Then you can verify a JWT by {@link verifyJWT} funciton.
+```ts
+await verifyJWT("eyJ...", key, opt) -> true
+```

@@ -151,3 +151,158 @@ const ALGJWSTOSIG: Record<string, string> = {
   ES384: "SHA384withECDSA",
   ES512: "SHA512withECDSA",
 };
+
+/*
+ *   alg: ['RS256', 'RS512', 'PS256', 'PS512'],
+ *   iss: ['http://foo.com'],
+ *   sub: ['mailto:john@foo.com', 'mailto:alice@foo.com'],
+ *   verifyAt: KJUR.jws.IntDate.get('20150520235959Z'),
+ *   aud: ['http://foo.com'], // aud: 'http://foo.com' is fine too.
+ *   jti: 'id123456',
+ *   gracePeriod: 1 * 60 * 60 // accept 1 hour slow or fast
+ */
+/**
+ * verify parameters for {@link verifyJWT}
+ */
+export interface JWTVerifyOption {
+  /** acceptable JWS algorithm */
+  alg: string[];
+  /** acceptable JWT issuer claim */
+  iss?: string[];
+  /** acceptable JWT subject claim */
+  sub?: string[];
+  /** acceptable JWT audience claim */
+  aud?: string[];
+  /** time in second from Unix origin to verify */
+  verifyAt?: number;
+  /** acceptable JWT ID claim */
+  jti?: string;
+  /** acceptable time difference seconds to relax nbf and exp */
+  gracePeriod?: number;
+}
+
+/**
+ * verify JWT (JSON Web Token)
+ * @param sJWT - JWT string to verify
+ * @param key - key object to verify
+ * @param verifyOption - verify parameters
+ * @throws Error if JWT can't be verified
+ * @return true if successfully verified
+ * @see https://www.rfc-editor.org/rfc/rfc7519
+ * @see verifyJWS
+ * @example
+ * const key = await getHMACKey("hmacSHA256", "12ab...");
+ * await verifyJWT("eyJhb...", key, {
+ *   alg: ["HS256", "HS384"],
+ *   iss: ["https://jwt-idp.example.com"],
+ *   sub: ["mailto:mike@example.com", "mailto:joe@example.com"],
+ *   aud: ["http://foo1.com"],
+ *   jti: "id123456",
+ * }) -> true
+ */
+export async function verifyJWT(sJWT: string, key: CryptoKey, verifyOption: JWTVerifyOption): Promise<boolean> {
+  const [sHead, sPayload, sSig] = sJWT.split(".");
+  let pHead: Record<string, string>;
+  let pPayload: Record<string, number | string | string[]>;
+  //console.log("sHead=", sHead);
+
+  // parse header
+  try {
+    pHead = JSON.parse(b64utoutf8(sHead));
+  } catch (ex) {
+    throw new Error(`malformed header: ${sHead}`);
+  }
+
+  // algorithm check in header
+  try {
+    if (!verifyOption.alg.includes(pHead.alg)) throw Error("alg");
+  } catch (ex) {
+    throw new Error(`acceptable algorithm unmatch: ${ex}`);
+  }
+
+  // typ check in header
+  if ((pHead.typ as string) !== "JWT") {
+    throw new Error(`typ in header not JWT`);
+  }
+
+  // parse payload
+  try {
+    pPayload = JSON.parse(b64utoutf8(sPayload));
+  } catch (ex) {
+    throw new Error(`malformed payload: ${sPayload}`);
+  }
+
+  // iss check
+  if (verifyOption.iss !== undefined) {
+    const acceptISS: string[] = verifyOption.iss;
+    if (!acceptISS.includes(pPayload.iss as string)) {
+      throw new Error(`iss not accepted: ${pPayload.iss} in ${verifyOption.iss}`);
+    }
+  }
+
+  // sub check
+  if (verifyOption.sub !== undefined) {
+    const acceptSUB: string[] = verifyOption.sub;
+    if (!acceptSUB.includes(pPayload.sub as string)) {
+      throw new Error(`sub not accepted: ${pPayload.sub} in ${verifyOption.sub}`);
+    }
+  }
+
+  // aud check
+  if (verifyOption.aud !== undefined) {
+    const acceptAUD: string[] = verifyOption.aud;
+    if (!acceptAUD.includes(pPayload.aud as string)) {
+      throw new Error(`aud not accepted: ${pPayload.aud} in ${verifyOption.aud}`);
+    }
+  }
+
+  // exp check (now <= exp)
+  const verifyAt: number = (verifyOption.verifyAt !== undefined) ? verifyOption.verifyAt : getnow();
+  const gracePeriod: number = (verifyOption.gracePeriod !== undefined) ? verifyOption.gracePeriod : 0;
+  if (pPayload.exp !== undefined) {
+    const acceptEXP: number = (pPayload.exp as number) + gracePeriod;
+    if (verifyAt > acceptEXP) {
+      throw new Error(`token expired: v=${verifyAt}, exp=${acceptEXP}`);
+    }
+  }
+
+  // nbf check (nbf <= now)
+  if (pPayload.nbf !== undefined) {
+    const acceptNBF: number = (pPayload.nbf as number) - gracePeriod;
+    if (verifyAt < acceptNBF) {
+      throw new Error(`token not yet available: v=${verifyAt}, nbf=${acceptNBF}`);
+    }
+  }
+
+  // jti check
+  if (verifyOption.jti !== undefined) {
+    const acceptJTI: string = verifyOption.jti;
+    if (pPayload.jti !== undefined && pPayload.jti !== acceptJTI) {
+      throw new Error(`jti not accepted: jti=${pPayload.jti}, accept=${acceptJTI}`);
+    }
+  }
+
+  // verify JWS signature
+  try {
+    const result = await verifyJWS(sJWT, key, verifyOption.alg);
+    return result;
+  } catch (ex) {
+    throw new Error(`invalid signature: ${ex}`);
+  }
+
+  return true;
+}
+
+/**
+ * get NumericDate of current time
+ * @return NumericDate value
+ * @description
+ * This function returns a current time number of seconds 
+ * from Unix origin time (i.e. 1970-01-01T00:00:00Z UTC).
+ * @example
+ * getnow() -> 1716204320
+ */
+export function getnow() {
+  return ~~(Date.now() / 1000);
+}
+

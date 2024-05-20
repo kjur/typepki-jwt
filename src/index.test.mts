@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { b64utohex, utf8tohex } from "typepki-strconv";
+import { b64utohex, utf8tohex, zulutosec } from "typepki-strconv";
 import { getHMACKey, importPEM } from "typepki-webcrypto";
-import { signJWS, verifyJWS } from "./index.mts";
+import { JWTVerifyOption, signJWS, verifyJWS, verifyJWT } from "./index.mts";
 
 describe("signJWS", async () => {
   test("RFC 7797 4.1 HS256 example", async () => {
@@ -237,3 +237,121 @@ LUK43YvJh+rhv4nKuF7iHjVjBd9sB6iDjj70HFldzOQ9r8SRI+9NirupPTkF5AKN
 e6kUhKJ1luB7S27ZkvB3tSTT3P593VVJvnzOjaA1z6Cz+4+eRvcysqhrRgFlwI9T
 EwIDAQAB
 -----END PUBLIC KEY-----`;
+
+// JWT token used in qunit-do-jwt-veri.html ==================================
+// tool_jwt.html with one aud
+var jwtHS256AUD1 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2p3dC1pZHAuZXhhbXBsZS5jb20iLCJzdWIiOiJtYWlsdG86bWlrZUBleGFtcGxlLmNvbSIsIm5iZiI6MSwiZXhwIjoyMDgyNzU4Mzk5LCJpYXQiOjE0MzI5MTQ0MzMsImp0aSI6ImlkMTIzNDU2IiwidHlwIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS9yZWdpc3RlciIsImF1ZCI6Imh0dHA6Ly9mb28xLmNvbSJ9.r2mRSoDobgrPg9zDlTEsyQNpua6aGId4UKRYnEo9KRk";
+
+describe("verifyJWT", async () => {
+  const KEYHS2AAA = await getHMACKey("hmacSHA256", "616161");
+
+  // alg
+  test("alg in HS256", async () => {
+    expect(await verifyJWT(jwtHS256AUD1, KEYHS2AAA, {alg: ["HS256"]})).toBe(true);
+  });
+  test("alg not in RS256", async () => {
+    expect(async () => {
+      await verifyJWT(jwtHS256AUD1, KEYHS2AAA, {alg: ["RS256"]})
+    }).toThrow(/acceptable algorithm/);
+  });
+
+  // iss
+  test("iss accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      iss: ["https://jwt-idp.example.com"],
+    };
+    expect(await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)).toBe(true);
+  });
+  test("iss not accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      iss: ["wrong iss"],
+    };
+    expect(async () => {await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)}).toThrow(/iss not accepted/);
+  });
+
+  // sub check
+  test("sub accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      sub: ["mailto:mike@example.com"],
+    };
+    expect(await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)).toBe(true);
+  });
+  test("sub not accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      sub: ["wrong sub"],
+    };
+    expect(async () => {await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)}).toThrow(/sub not accepted/);
+  });
+
+  // aud check
+  test("aud accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      aud: ["http://foo1.com"],
+    };
+    expect(await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)).toBe(true);
+  });
+  test("aud not accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      aud: ["wrong aud"],
+    };
+    expect(async () => {await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)}).toThrow(/aud not accepted/);
+  });
+
+  // verifyAt check (1 <= now <= 208275839(=20351231235959Zw))
+  test("verifyAt nbf <= at <= exp", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      verifyAt: zulutosec("20201231235959Z"),
+    };
+    expect(await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)).toBe(true);
+  });
+  test("verifyAt at < nbf", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      verifyAt: 0,
+    };
+    expect(async () => {await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)}).toThrow(/token not yet/);
+  });
+  test("verifyAt exp < at", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      verifyAt: zulutosec("20991231235959Z"),
+    };
+    expect(async () => {await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)}).toThrow(/token expired/);
+  });
+
+  // jti check
+  test("jti accept", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      jti: "id123456",
+    };
+    expect(await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)).toBe(true);
+  });
+  test("jti accept unmatch", async () => {
+    const opt: JWTVerifyOption = {
+      alg: ["HS256"],
+      jti: "id",
+    };
+    expect(async () => {await verifyJWT(jwtHS256AUD1, KEYHS2AAA, opt)}).toThrow(/jti not accepted/);
+  });
+
+});
+/*
+pPayload= {
+  iss: "https://jwt-idp.example.com",
+  sub: "mailto:mike@example.com",
+  nbf: 1,
+  exp: 2082758399,
+  iat: 1432914433,
+  jti: "id123456",
+  typ: "https://example.com/register",
+  aud: "http://foo1.com",
+}
+ */
