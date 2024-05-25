@@ -4,45 +4,62 @@ import { getHMACKey, importPEM } from "typepki-webcrypto";
 import { JWTVerifyOption, signJWS, verifyJWS, verifyJWT } from "./index.mts";
 
 describe("signJWS", async () => {
-  test("RFC 7797 4.1 HS256 example", async () => {
+  test("RFC 7797 4.1 HS256 example (keyobj)", async () => {
     const key = await getHMACKey("hmacSHA256", JWS9741KEYHEX);
     expect(await signJWS("HS256", key, JWSHEAD9741, JWSPAY9741)).toBe(JWS9741);
   });
-  test("RFC 7515 A.1 HS256 example", async () => {
+  test("RFC 7515 A.1 HS256 example (keyobj)", async () => {
     const key = await getHMACKey("hmacSHA256", b64utohex(JWSKEYA1B64U));
     expect(await signJWS("HS256", key, JWSHEADA1, JWSPAYA1)).toBe(JWSA1);
   });
-  test("RFC 7515 A.2 RS256 example", async () => {
+  test("RFC 7515 A.2 RS256 example (keyobj)", async () => {
     const prvkey = await importPEM(PRVPEMA2, "SHA256withRSA");
     expect(await signJWS("RS256", prvkey, JWSHEADA2, JWSPAYA2)).toBe(JWSA2);
+  });
+  test("RFC 7515 A.1 HS256 example (keyhex)", async () => {
+    expect(await signJWS("HS256", b64utohex(JWSKEYA1B64U), JWSHEADA1, JWSPAYA1)).toBe(JWSA1);
+  });
+  test("RFC 7515 A.2 RS256 example (keypem)", async () => {
+    expect(await signJWS("RS256", PRVPEMA2, JWSHEADA2, JWSPAYA2)).toBe(JWSA2);
   });
 });
 
 describe("verifyJWS", async () => {
-  test("RFC 7797 4.1 HS256 example", async () => {
+  test("RFC 7797 4.1 HS256 example (keyobj)", async () => {
     const key = await getHMACKey("hmacSHA256", JWS9741KEYHEX);
     expect(await verifyJWS(JWS9741, key)).toBe(true);
   });
-  test("RFC 7515 A.1 HS256 example", async () => {
+  test("RFC 7515 A.1 HS256 example (keyobj)", async () => {
     const key = await getHMACKey("hmacSHA256", b64utohex(JWSKEYA1B64U));
     expect(await verifyJWS(JWSA1, key)).toBe(true);
   });
-  test("RFC 7515 A.2 RS256 example", async () => {
+  test("RFC 7515 A.2 RS256 example (keyobj)", async () => {
     const pubkey = await importPEM(PUBPEMA2, "SHA256withRSA");
     expect(await verifyJWS(JWSA2, pubkey)).toBe(true);
   });
-  test("RFC 7515 A.3 ES256 example", async () => {
-    const pubkey = await importPEM(PUBPEMA3, "SHA256withECDSA", "P-256");
+  test("RFC 7515 A.3 ES256 example (keyobj)", async () => {
+    const pubkey = await importPEM(PUBPEMA3, "SHA256withECDSA");
     expect(await verifyJWS(JWSA3, pubkey)).toBe(true);
   });
-  test("RFC 7515 A.4 ES512 example", async () => {
-    const pubkey = await importPEM(PUBPEMA4, "SHA512withECDSA", "P-521");
+  test("RFC 7515 A.4 ES512 example (keyobj)", async () => {
+    const pubkey = await importPEM(PUBPEMA4, "SHA512withECDSA");
     expect(await verifyJWS(JWSA4, pubkey)).toBe(true);
   });
-  test("PS256 with RFC 9500 TEST KEY RSA2048 jwt.io", async () => {
+  test("PS256 with RFC 9500 TEST KEY RSA2048 jwt.io (keyobj)", async () => {
     const pubkey = await importPEM(JWSPS256R2PUB, "SHA256withRSAandMGF1");
     expect(await verifyJWS(JWSPS256R2, pubkey)).toBe(true);
   });
+
+  test("RFC 7515 A.1 HS256 example (keyhex)", async () => {
+    expect(await verifyJWS(JWSA1, b64utohex(JWSKEYA1B64U))).toBe(true);
+  });
+  test("RFC 7515 A.2 RS256 example (keypem)", async () => {
+    expect(await verifyJWS(JWSA2, PUBPEMA2)).toBe(true);
+  });
+  test("RFC 7515 A.3 ES256 example (keypem)", async () => {
+    expect(await verifyJWS(JWSA3, PUBPEMA3)).toBe(true);
+  });
+
   test("acceptAlgs option test - HS256 not in [RS256]", async () => {
     const key = await getHMACKey("hmacSHA256", b64utohex(JWSKEYA1B64U));
     expect(async () => {

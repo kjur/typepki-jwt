@@ -1,5 +1,5 @@
-typepki-jwt: JWT/JWS sub module for TypePKI library
-===================================================
+typepki-jwt: JWT/JWS sub module for TypePKI library (Beta)
+==========================================================
 
 [TOP](https://kjur.github.io/typepki-jwt/) | [github](https://github.com/kjur/typepki-jwt) | [npm](https://www.npmjs.com/package/typepki-jwt) | [TypePKI](https://kjur.github.io/typepki/) 
 
@@ -29,6 +29,11 @@ import { signJWS } from "typepki-jwt";
 const sJWS = await signJWS("RS256", prvkey, "eyJOe...", "eyJpc...");
 ```
 "sJWS" will be a string such like "eyJOe...".
+
+It is even easier if you specify the PEM or HMAC key string directly instead of the CryptoKey object:
+```JavaScript
+const sJWS = await signJWS("RS256", "-----BEGIN PRIVATE KEY...", "eyJOe...", "eyJpc...");
+```
 
 ### verifying JWS with public key
 Verifying JWS will be similar way. Importing a public key first:

@@ -6,32 +6,44 @@ import {
   utf8tohex,
 } from "typepki-strconv";
 import {
-  signHMACHex,
+  SignatureAlgorithmName,
   signHex,
-  verifyHMACHex,
   verifyHex,
 } from "typepki-webcrypto";
 
 /**
+ * acceptable JWS signature algorithm
+ * @see https://www.rfc-editor.org/rfc/rfc7515.html
+ */
+export type JWSAlgorithmName = 
+  "HS256" | "HS384" | "HS512" |
+  "RS256" | "RS384" | "RS512" |
+  "PS256" | "PS384" | "PS512" |
+  "ES256" | "ES384" | "ES512";
+
+/**
  * sign JWS (JSON Web Signature)
  * @param alg - JWS signature algorithm
- * @param key - private key object
+ * @param keyobjOrString - key for verification. CryptoKey object, PKCS#8 PEM private key or HMAC hexadecimal key string
  * @param header - JWS header
  * @param payload - JWS payload
  * @return JWS signature string
  * @see https://www.rfc-editor.org/rfc/rfc7515.html
  * @example
  * await signJWS("RS256", prvkey, "eyJOe..", "eyJpc...") -> "eyJOe..."
+ * await signJWS("PS256", "-----BEGIN PRIVATE...", "eyJOe..", "eyJpc...") -> "eyJOe..."
+ * await signJWS("ES256", "-----BEGIN PRIVATE...", "eyJOe..", "eyJpc...") -> "eyJOe..."
+ * await signJWS("HS256", "12ab34...", "eyJOe..", "eyJpc...") -> "eyJOe..."
  */
 export async function signJWS(
-  alg: string,
-  key: CryptoKey,
+  alg: JWSAlgorithmName,
+  keyobjOrString: CryptoKey | string, 
   header: string,
   payload: string,
 ): Promise<string> {
   const algMatch = alg.match(/^(HS|RS|PS|ES)(256|384|512)$/);
   if (algMatch == null) {
-    throw new Error(`algorithm not supported: ${alg}`);
+    throw new Error(`JWS algorithm not supported: ${alg}`);
   }
 
   const sHeader = header;
@@ -48,32 +60,27 @@ export async function signJWS(
   const hTBS = utf8tohex(sTBS);
 
   const sigalg = algjwstosig(algMatch[1], algMatch[2]);
-  let hSig: string;
-  if (algMatch[1] === "HS") {
-    hSig = await signHMACHex(sigalg, key, hTBS);
-  } else if (algMatch[1] === "ES") {
-    //hSig = await signHex(sigalg, key, hTBS, algjwstocurve(alg));
-    hSig = await signHex(sigalg, key, hTBS);
-  } else {
-    hSig = await signHex(sigalg, key, hTBS);
-  }
+  let hSig = await signHex(sigalg, keyobjOrString, hTBS);
   return `${sTBS}.${hextob64u(hSig)}`;
 }
 
 /**
  * verifiy JWS signature
  * @param sJWS - JWS signature string
- * @param key - public key object to verify
+ * @param keyobjOrString - key for verification. CryptoKey object, PKCS#8 PEM public key or HMAC hexadecimal key string
  * @param acceptAlgs - acceptable JWS signature algorithm to avoid downgrade attacks (OPTION)
  * @return true if JWS signature is valid
  * @see https://www.rfc-editor.org/rfc/rfc7515.html
+ * @see {@link verifyJWT}
  * @example
  * await verifyJWS("eJYOe...", pubkey) -> true/false
  * await verifyJWS("eJYOe...", pubkey, ["RS512", "PS512"]) -> true/false
+ * await verifyJWS("eJYOe...", "-----BEGIN PUBLIC...", ["ES512"]) -> true/false
+ * await verifyJWS("eJYOe...", "12ab34...", ["HS512"]) -> true/false
  */
 export async function verifyJWS(
   sJWS: string,
-  key: CryptoKey,
+  keyobjOrString: CryptoKey | string, 
   acceptAlgs?: Array<string>,
 ): Promise<boolean> {
   const [sHead, sPayload, sSig] = sJWS.split(".");
@@ -92,13 +99,7 @@ export async function verifyJWS(
   const sigalg = algjwstosig(algMatch[1], algMatch[2]);
   const hData = utf8tohex(`${sHead}.${sPayload}`);
   const hSig = b64utohex(sSig);
-  if (algMatch[1] === "ES") {
-    return await verifyHex(sigalg, key, hSig, hData, algjwstocurve(alg));
-  }
-  if (algMatch[1] === "HS") {
-    return await verifyHMACHex(sigalg, key, hSig, hData);
-  }
-  return await verifyHex(sigalg, key, hSig, hData);
+  return await verifyHex(sigalg, keyobjOrString, hSig, hData);
 }
 
 function algjwstocurve(alg: string): string {
@@ -108,7 +109,7 @@ function algjwstocurve(alg: string): string {
   throw new Error(`alg not supported: ${alg}`);
 }
 
-function algjwstosig(shortAlg: string, shortHashAlg: string): string {
+function algjwstosig(shortAlg: string, shortHashAlg: string): SignatureAlgorithmName {
   let alg1: string;
   let alg2: string;
   if (shortHashAlg === "256") {
@@ -133,8 +134,8 @@ function algjwstosig(shortAlg: string, shortHashAlg: string): string {
     throw new Error(`shortAlg not supported: ${shortAlg}`);
   }
 
-  if (shortAlg === "HS") return `${alg2}${alg1}`;
-  return `${alg1}${alg2}`;
+  if (shortAlg === "HS") return `${alg2}${alg1}` as SignatureAlgorithmName;
+  return `${alg1}${alg2}` as SignatureAlgorithmName;
 }
 
 const ALGJWSTOSIG: Record<string, string> = {
@@ -184,12 +185,12 @@ export interface JWTVerifyOption {
 /**
  * verify JWT (JSON Web Token)
  * @param sJWT - JWT string to verify
- * @param key - key object to verify
+ * @param keyobjOrString - key for verification. CryptoKey object, PKCS#8 PEM public key or HMAC hexadecimal key string
  * @param verifyOption - verify parameters
  * @throws Error if JWT can't be verified
  * @return true if successfully verified
  * @see https://www.rfc-editor.org/rfc/rfc7519
- * @see verifyJWS
+ * @see {@link verifyJWS}
  * @example
  * const key = await getHMACKey("hmacSHA256", "12ab...");
  * await verifyJWT("eyJhb...", key, {
@@ -198,9 +199,14 @@ export interface JWTVerifyOption {
  *   sub: ["mailto:mike@example.com", "mailto:joe@example.com"],
  *   aud: ["http://foo1.com"],
  *   jti: "id123456",
- * }) -> true
+ * }) -> true/false
+ * await verifyJWT("eyJ...", "-----BEGIN PUBLIC...", {...}) -> true/false
  */
-export async function verifyJWT(sJWT: string, key: CryptoKey, verifyOption: JWTVerifyOption): Promise<boolean> {
+export async function verifyJWT(
+  sJWT: string,
+  keyobjOrString: CryptoKey | string, 
+  verifyOption: JWTVerifyOption
+): Promise<boolean> {
   const [sHead, sPayload, sSig] = sJWT.split(".");
   let pHead: Record<string, string>;
   let pPayload: Record<string, number | string | string[]>;
@@ -284,7 +290,7 @@ export async function verifyJWT(sJWT: string, key: CryptoKey, verifyOption: JWTV
 
   // verify JWS signature
   try {
-    const result = await verifyJWS(sJWT, key, verifyOption.alg);
+    const result = await verifyJWS(sJWT, keyobjOrString, verifyOption.alg);
     return result;
   } catch (ex) {
     throw new Error(`invalid signature: ${ex}`);

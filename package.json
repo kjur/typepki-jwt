@@ -1,6 +1,6 @@
 {
   "name": "typepki-jwt",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Kenji Urushima <kenji.urushima@gmail.com>",
   "description": "JWT/JWS sub module for TypePKI library (beta)",
   "homepage": "https://kjur.github.io/typepki-jwt",
@@ -68,7 +68,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "typepki-strconv": "^0.4.0",
-    "typepki-webcrypto": "^0.2.0"
+    "typepki-strconv": "^0.5.0",
+    "typepki-webcrypto": "^0.4.1"
   }
 }
